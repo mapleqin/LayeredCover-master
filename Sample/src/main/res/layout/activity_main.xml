@@ -22,7 +22,7 @@
             android:layout_height="200dp"
             android:background="#F0F" />
 
-        <RelativeLayout
+        <ListView
             android:layout_width="match_parent"
             android:layout_height="600dp"
             android:background="#00F" />
