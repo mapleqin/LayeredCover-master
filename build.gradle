@@ -15,5 +15,10 @@ buildscript {
 allprojects {
     repositories {
         jcenter()
+        mavenCentral()
+        mavenLocal()
+        maven {
+            url 'http://www.svmeng.com:8081/nexus/content/repositories/releases'
+        }
     }
 }
