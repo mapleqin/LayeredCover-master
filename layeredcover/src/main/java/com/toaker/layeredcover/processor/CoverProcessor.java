@@ -15,6 +15,10 @@
  *******************************************************************************/
 package com.toaker.layeredcover.processor;
 
+import android.view.View;
+
+import com.toaker.common.tlog.TLog;
+
 /**
  * Decorator for LayeredCover-master
  *
@@ -25,38 +29,77 @@ package com.toaker.layeredcover.processor;
  */
 public class CoverProcessor {
 
-    private float mDistanceTopY;
+    protected static int VERSION = 1;
 
-    private float mChildViewHeight;
+    protected static final boolean DEBUG = true;
+
+    // log tag
+    protected static String LOG_TAG = "CoverProcessor-handle" + ++VERSION;
+
+    private View mChildView;
+
+    private int mPosition;
+
+    private float mDistanceTopY;
 
     private float mOffsetY;
 
-    private float mCurrentY;
-
     private float mDownY;
 
-    private float mLastY;
+    private float mCriterion;
+
+    private float   mScale;
+
+    public  CoverProcessor(View child,int position){
+        this.mPosition = position;
+        this.mChildView = child;
+    }
 
     public void disposeDown(float x,float y){
-        this.mDownY = y - mLastY;
+        this.mDownY = y;
     }
 
     public void disposeMove(float x,float y){
-        setOffsetY(mDistanceTopY / (mDownY - y));
-        setCurrentY(mCurrentY + getOffsetY());
-        mLastY = y;
+        setOffsetY((y - mDownY));
+        mDownY = y;
+        if(isBottomEdges() ||isTopEdges() ){
+            return;
+        }
+        if(mChildView.getTop() + getOffsetY() < 0){
+            setOffsetY(0 - mChildView.getTop());
+        }
+        if(mChildView.getTop() + getOffsetY() > mDistanceTopY){
+            setOffsetY(mDistanceTopY - mChildView.getTop());
+        }
+        mChildView.offsetTopAndBottom((int) getOffsetY());
+        if(DEBUG){
+            TLog.i(LOG_TAG, "Touch MOVE Scale:%s -- P:%s Top:%s", getScale(),mPosition,mChildView.getTop());
+        }
+    }
+
+    public float getScale() {
+        if(mPosition == 0 || mPosition == 1){
+            this.mScale = mPosition;
+        }else {
+            this.mScale = mDistanceTopY / mCriterion;
+        }
+        return mScale;
+    }
+
+    public void onLayout(int l, int t, int r, int b) {
+        mChildView.layout(l,t,r,b);
+    }
+
+    public void setCriterion(float mCriterion) {
+        this.mCriterion = mCriterion;
     }
 
     public boolean isTopEdges(){
-        return getCurrentY() <= 0;
+        return mChildView.getTop() < 0;
     }
 
     public boolean isBottomEdges(){
-        return getCurrentY() >= mDistanceTopY;
-    }
-
-    public boolean isShieldTouch(){
-        return mCurrentY <= 0;
+        return mChildView.getTop() > mDistanceTopY;
     }
 
     public void setDistanceTopY(float distanceTopY){
@@ -67,14 +110,6 @@ public class CoverProcessor {
         return mDistanceTopY;
     }
 
-    public float getChildViewHeight() {
-        return mChildViewHeight;
-    }
-
-    public void setChildViewHeight(float mChildViewHeight) {
-        this.mChildViewHeight = mChildViewHeight;
-    }
-
     public float getOffsetY() {
         return mOffsetY;
     }
@@ -83,15 +118,11 @@ public class CoverProcessor {
         this.mOffsetY = mOffsetY;
     }
 
-    public float getCurrentY() {
-        return mCurrentY;
+    public View getChildView() {
+        return mChildView;
     }
 
-    public void setCurrentY(float mCurrentY) {
-        this.mCurrentY = mCurrentY;
-    }
-
-    public static CoverProcessor emptyCoverProcessor(){
-        return new CoverProcessor();
+    public int getMeasuredHeight(){
+        return mChildView.getMeasuredHeight();
     }
 }

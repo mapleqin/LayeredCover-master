@@ -25,7 +25,8 @@ import android.view.ViewGroup;
 import com.toaker.common.tlog.TLog;
 import com.toaker.layeredcover.processor.CoverProcessor;
 
-import java.util.LinkedList;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Decorator for LayeredCover-master
@@ -41,16 +42,16 @@ public class LayeredCoverLayout extends ViewGroup {
 
     protected static final boolean DEBUG = true;
 
-    protected LinkedList<View> mChildViews = new LinkedList<>();
+    // log tag
+    protected static String LOG_TAG = "LayeredCover-layout" + ++VERSION;
 
-    protected LinkedList<CoverProcessor> mProcessors = new LinkedList<>();
+    protected List<CoverProcessor> mProcessors = new ArrayList<>();
 
     protected MotionEvent mDownMotionEvent;
 
-    protected MotionEvent mLastMoveMotionEvent;
+    private float mCriterion = 1;
 
-    // log tag
-    protected static String LOG_TAG = "LayeredCover-layout" + ++VERSION;
+    protected MotionEvent mLastMoveMotionEvent;
 
     public LayeredCoverLayout(Context context) {
         super(context);
@@ -66,10 +67,9 @@ public class LayeredCoverLayout extends ViewGroup {
 
     @Override
     protected void onFinishInflate() {
-        mChildViews.clear();
+        mProcessors.clear();
         for(int i=0;i<getChildCount();i++){
-            mChildViews.add(getChildAt(i));
-            mProcessors.add(CoverProcessor.emptyCoverProcessor());
+            mProcessors.add(new CoverProcessor(getChildAt(i),i));
         }
         super.onFinishInflate();
     }
@@ -82,8 +82,8 @@ public class LayeredCoverLayout extends ViewGroup {
                     , getMeasuredWidth(), getMeasuredHeight(), getPaddingLeft(), getPaddingTop()
                     , getPaddingRight(), getPaddingBottom());
         }
-        for (View child:mChildViews){
-            onMeasureChild(child,widthMeasureSpec,heightMeasureSpec);
+        for (CoverProcessor processor:mProcessors){
+            onMeasureChild(processor.getChildView(),widthMeasureSpec,heightMeasureSpec);
         }
     }
 
@@ -123,20 +123,27 @@ public class LayeredCoverLayout extends ViewGroup {
         }
         int marginTop = 0;
         int index = 0;
-        for(View view:mChildViews){
-            MarginLayoutParams marginLayoutParams = getMarginLayoutParams(view);
+        for (CoverProcessor processor:mProcessors){
+            MarginLayoutParams marginLayoutParams = getMarginLayoutParams(processor.getChildView());
             int left = getPaddingLeft() + marginLayoutParams.leftMargin;
             int top  = getPaddingTop() + marginLayoutParams.topMargin + marginTop;
-            int right = left + view.getMeasuredWidth();
-            int bottom = top + view.getMeasuredHeight();
+            int right = left + processor.getChildView().getMeasuredWidth();
+            int bottom = top + processor.getChildView().getMeasuredHeight();
+
             // child View layout;
-            view.layout(left,top,right,bottom);
-            mProcessors.get(index).setDistanceTopY(marginTop);
-            mProcessors.get(index).setChildViewHeight(view.getMeasuredHeight());
-            marginTop += marginLayoutParams.topMargin + marginLayoutParams.bottomMargin + view.getMeasuredHeight();
+            processor.onLayout(left, top, right, bottom);
+            if(index == 0){
+                this.mCriterion = processor.getMeasuredHeight();
+            }
+            processor.setCriterion(mCriterion);
+            processor.setDistanceTopY(marginTop);
+            TLog.d(LOG_TAG, "marginTop is %s", marginTop);
+
+            TLog.d(LOG_TAG, "ChildViewHeight is %s", processor);
+            marginTop += marginLayoutParams.topMargin + marginLayoutParams.bottomMargin + processor.getMeasuredHeight();
             index ++;
             if(DEBUG){
-                TLog.d(LOG_TAG, "onLayout Child View %s  layout: %s %s %s %s  marginTop:%s", view, left, top, right, bottom, marginTop);
+                TLog.d(LOG_TAG, "onLayout Child View %s  layout: %s %s %s %s  marginTop:%s", processor, left, top, right, bottom, marginTop);
             }
         }
     }
@@ -155,7 +162,6 @@ public class LayeredCoverLayout extends ViewGroup {
         switch (event.getAction()){
             case MotionEvent.ACTION_CANCEL:
             case MotionEvent.ACTION_UP:
-                //moveChildView();
                 if(DEBUG){
                     TLog.i(LOG_TAG,"Touch Event %s  x:%s  y:%s",event.getAction(),event.getX(),event.getY());
                 }
@@ -163,14 +169,13 @@ public class LayeredCoverLayout extends ViewGroup {
 
             case MotionEvent.ACTION_MOVE:
                 mLastMoveMotionEvent = event;
-                for (CoverProcessor processor:mProcessors){
-                    processor.disposeMove(event.getX(), event.getY());
-                }
                 if(DEBUG){
-                    TLog.i(LOG_TAG,"Touch MOVE x:%s  y:%s",event.getX(),event.getY());
+                   TLog.i(LOG_TAG,"Touch MOVE x:%s  y:%s",event.getX(),event.getY());
                 }
-                moveChildView();
-                //dispatchCancelTouchEvent();
+                for (CoverProcessor processor:mProcessors){
+                    processor.disposeMove(event.getX(),event.getY());
+                }
+                invalidate();
                 return true;
 
             case MotionEvent.ACTION_DOWN:
@@ -190,18 +195,18 @@ public class LayeredCoverLayout extends ViewGroup {
      * Processor the Child View move;
      */
     private void moveChildView() {
-        for(int i= 0;i<mChildViews.size();i++){
-            View view = mChildViews.get(i);
-            CoverProcessor processor = mProcessors.get(i);
-            //if(!processor.isTopEdges() && !processor.isBottomEdges()){
-                view.offsetTopAndBottom((int) processor.getOffsetY());
-            //}
-
-            if(DEBUG){
-                TLog.i(LOG_TAG,"moveChildView offset : %s",processor.getOffsetY());
-            }
-        }
-        invalidate();
+//        for(int i= 0;i<mChildViews.size();i++){
+//            View view = mChildViews.get(i);
+//            CoverProcessor processor = mProcessors.get(i);
+//            //if(!processor.isTopEdges() && !processor.isBottomEdges()){
+//                view.offsetTopAndBottom((int) processor.getOffsetY());
+//            //}
+//
+//            if(DEBUG){
+//                //TLog.i(LOG_TAG,"moveChildView offset : %s",processor.getOffsetY());
+//            }
+//        }
+//        invalidate();
     }
 
     /**
@@ -209,7 +214,7 @@ public class LayeredCoverLayout extends ViewGroup {
      */
     protected void dispatchCancelTouchEvent(){
        if(DEBUG){
-           TLog.i(LOG_TAG,"dispatchCancelTouchEvent");
+           //TLog.i(LOG_TAG,"dispatchCancelTouchEvent");
        }
         MotionEvent event = MotionEvent.obtain(mDownMotionEvent.getDownTime(), mDownMotionEvent.getEventTime() + ViewConfiguration.getLongPressTimeout(), MotionEvent.ACTION_CANCEL,
                 mDownMotionEvent.getX(), mDownMotionEvent.getY(), mDownMotionEvent.getMetaState());
@@ -221,7 +226,7 @@ public class LayeredCoverLayout extends ViewGroup {
      */
     protected void dispatchDownTouchEvent(){
         if(DEBUG){
-            TLog.i(LOG_TAG,"dispatchDownTouchEvent");
+            //TLog.i(LOG_TAG,"dispatchDownTouchEvent");
         }
         MotionEvent event = MotionEvent.obtain(mLastMoveMotionEvent.getDownTime(), mLastMoveMotionEvent.getEventTime(), MotionEvent.ACTION_DOWN,
                 mLastMoveMotionEvent.getX(), mLastMoveMotionEvent.getY(), mLastMoveMotionEvent.getMetaState());
