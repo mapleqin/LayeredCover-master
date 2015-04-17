@@ -18,9 +18,11 @@ package com.toaker.layeredcover;
 import android.content.Context;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
+import android.view.VelocityTracker;
 import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
+import android.widget.Scroller;
 
 import com.toaker.common.tlog.TLog;
 import com.toaker.layeredcover.processor.CoverProcessor;
@@ -38,6 +40,10 @@ import java.util.List;
  */
 public class LayeredCoverLayout extends ViewGroup {
 
+    static final int ANIMATED_SCROLL_GAP = 250;
+
+    static final float MAX_SCROLL_FACTOR = 0.5f;
+
     protected static int VERSION = 1;
 
     protected static final boolean DEBUG = true;
@@ -53,23 +59,44 @@ public class LayeredCoverLayout extends ViewGroup {
 
     protected MotionEvent mLastMoveMotionEvent;
 
+    private Scroller mScroller;
+
+    private VelocityTracker mVelocityTracker;
+
+
+    private int mMinimumVelocity;
+
+    private int mMaximumVelocity;
+
+
     public LayeredCoverLayout(Context context) {
-        super(context);
+        this(context, null);
     }
 
     public LayeredCoverLayout(Context context, AttributeSet attrs) {
-        super(context, attrs);
+        this(context, attrs, 0);
     }
 
     public LayeredCoverLayout(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
+        initialize();
+    }
+
+    private void initialize() {
+        mScroller = new Scroller(getContext());
+        setFocusable(true);
+        setDescendantFocusability(FOCUS_AFTER_DESCENDANTS);
+        setWillNotDraw(false);
+        final ViewConfiguration configuration = ViewConfiguration.get(getContext());
+        mMinimumVelocity = configuration.getScaledMinimumFlingVelocity();
+        mMaximumVelocity = configuration.getScaledMaximumFlingVelocity();
     }
 
     @Override
     protected void onFinishInflate() {
         mProcessors.clear();
         for(int i=0;i<getChildCount();i++){
-            mProcessors.add(new CoverProcessor(getChildAt(i),i));
+            mProcessors.add(new CoverProcessor(getChildAt(i),i,new Scroller(getContext())));
         }
         super.onFinishInflate();
     }
@@ -148,6 +175,42 @@ public class LayeredCoverLayout extends ViewGroup {
         }
     }
 
+    @Override
+    public void computeScroll() {
+        for (CoverProcessor processor:mProcessors){
+            if(processor.getScroller().computeScrollOffset()){
+                processor.scrollBy(-20);
+                postInvalidate();
+            }
+        }
+        super.computeScroll();
+    }
+
+    /**
+     *
+     * @param processor
+     * @param x
+     * @param y
+     */
+    public void scrollBy(CoverProcessor processor,int x, int y) {
+        processor.scrollBy(y);
+        invalidate();
+    }
+
+    private void releaseVelocityTracker() {
+        if (mVelocityTracker != null) {
+            mVelocityTracker.recycle();
+            mVelocityTracker = null;
+        }
+    }
+
+    private void obtainVelocity(MotionEvent event){
+        if (mVelocityTracker == null) {
+            mVelocityTracker = VelocityTracker.obtain();
+        }
+        mVelocityTracker.addMovement(event);
+    }
+
     /**
      *
      * @param event
@@ -159,9 +222,20 @@ public class LayeredCoverLayout extends ViewGroup {
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent event) {
+        obtainVelocity(event);
         switch (event.getAction()){
             case MotionEvent.ACTION_CANCEL:
             case MotionEvent.ACTION_UP:
+                final VelocityTracker velocityTracker = mVelocityTracker;
+                velocityTracker.computeCurrentVelocity(1000, mMaximumVelocity);
+                int initialVelocity = (int) velocityTracker.getYVelocity();
+
+                if ((Math.abs(initialVelocity) > mMinimumVelocity)
+                        && getChildCount() > 0) {
+                    fling(initialVelocity);
+                }
+
+                releaseVelocityTracker();
                 if(DEBUG){
                     TLog.i(LOG_TAG,"Touch Event %s  x:%s  y:%s",event.getAction(),event.getX(),event.getY());
                 }
@@ -175,13 +249,16 @@ public class LayeredCoverLayout extends ViewGroup {
                 for (CoverProcessor processor:mProcessors){
                     processor.disposeMove(event.getX(),event.getY());
                 }
-                invalidate();
+                initialize();
                 return true;
 
             case MotionEvent.ACTION_DOWN:
                 mDownMotionEvent = event;
                 for (CoverProcessor processor:mProcessors){
                     processor.disposeDown(event.getX(),event.getY());
+                }
+                if(mScroller.isFinished()){
+                    mScroller.abortAnimation();
                 }
                 if(DEBUG){
                     TLog.i(LOG_TAG,"Touch Down x:%s  y:%s",event.getX(),event.getY());
@@ -192,22 +269,17 @@ public class LayeredCoverLayout extends ViewGroup {
     }
 
     /**
-     * Processor the Child View move;
+     * fling(int startX, int startY, int velocityX, int velocityY,
+     int minX, int maxX, int minY, int maxY)
+     * @param velocityY
      */
-    private void moveChildView() {
-//        for(int i= 0;i<mChildViews.size();i++){
-//            View view = mChildViews.get(i);
-//            CoverProcessor processor = mProcessors.get(i);
-//            //if(!processor.isTopEdges() && !processor.isBottomEdges()){
-//                view.offsetTopAndBottom((int) processor.getOffsetY());
-//            //}
-//
-//            if(DEBUG){
-//                //TLog.i(LOG_TAG,"moveChildView offset : %s",processor.getOffsetY());
-//            }
-//        }
-//        invalidate();
+    public void fling(int velocityY) {
+        for (CoverProcessor processor:mProcessors){
+            processor.fling(velocityY);
+            invalidate();
+        }
     }
+
 
     /**
      *

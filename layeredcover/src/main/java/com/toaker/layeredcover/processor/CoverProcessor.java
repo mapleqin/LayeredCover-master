@@ -16,6 +16,7 @@
 package com.toaker.layeredcover.processor;
 
 import android.view.View;
+import android.widget.Scroller;
 
 import com.toaker.common.tlog.TLog;
 
@@ -50,9 +51,14 @@ public class CoverProcessor {
 
     private float   mScale;
 
-    public  CoverProcessor(View child,int position){
+    private Scroller mScroll;
+
+    private boolean isUp = true;
+
+    public  CoverProcessor(View child,int position,Scroller mScroll){
         this.mPosition = position;
         this.mChildView = child;
+        this.mScroll  = mScroll;
     }
 
     public void disposeDown(float x,float y){
@@ -60,9 +66,16 @@ public class CoverProcessor {
     }
 
     public void disposeMove(float x,float y){
-        setOffsetY((y - mDownY));
         mDownY = y;
-        if(isBottomEdges() ||isTopEdges() ){
+        scrollBy(y - mDownY);
+        if(DEBUG){
+            TLog.i(LOG_TAG, "Touch MOVE Scale:%s -- P:%s Top:%s", getScale(),mPosition,mChildView.getTop());
+        }
+    }
+
+    public void scrollBy(float y) {
+        setOffsetY(Math.round(y * getScale()));
+        if(isBottomEdges() ||isTopEdges()){
             return;
         }
         if(mChildView.getTop() + getOffsetY() < 0){
@@ -71,14 +84,24 @@ public class CoverProcessor {
         if(mChildView.getTop() + getOffsetY() > mDistanceTopY){
             setOffsetY(mDistanceTopY - mChildView.getTop());
         }
-        mChildView.offsetTopAndBottom((int) getOffsetY());
-        if(DEBUG){
-            TLog.i(LOG_TAG, "Touch MOVE Scale:%s -- P:%s Top:%s", getScale(),mPosition,mChildView.getTop());
-        }
+        isUp = getOffsetY() > 0;
+        mChildView.offsetTopAndBottom(Math.round(getOffsetY() * 0.6f));
+    }
+
+    public int getLimit(){
+        return isUp?-10:10;
+    }
+
+    public void fling(int velocityY){
+        mScroll.fling(0,mChildView.getTop(),0,velocityY,0,0,0, (int) mDistanceTopY);
+    }
+
+    public Scroller getScroller() {
+        return mScroll;
     }
 
     public float getScale() {
-        if(mPosition == 0 || mPosition == 1){
+        if(mPosition == 0){
             this.mScale = mPosition;
         }else {
             this.mScale = mDistanceTopY / mCriterion;

@@ -10,11 +10,6 @@
         <RelativeLayout
             android:layout_width="match_parent"
             android:layout_height="200dp"
-            android:background="#F00" />
-
-        <RelativeLayout
-            android:layout_width="match_parent"
-            android:layout_height="300dp"
             android:background="#FF0" />
 
         <RelativeLayout
@@ -22,8 +17,26 @@
             android:layout_height="200dp"
             android:background="#F0F" />
 
-        <ListView
+        <RelativeLayout
             android:layout_width="match_parent"
+            android:layout_height="200dp"
+            android:background="#FF0" />
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="200dp"
+            android:background="#F0F" />
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="200dp"
+            android:background="#FF0" />
+
+        <ListView
+            android:id="@+id/list_view"
+            android:layout_width="match_parent"
+            android:divider="@android:color/white"
+            android:dividerHeight="5dp"
             android:layout_height="match_parent"
             android:background="#00F" />
 
